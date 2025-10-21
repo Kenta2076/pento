@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
@@ -10,9 +9,6 @@ from typing import Iterable, List
 import numpy as np
 
 from . import classification, normalization, preprocessing, segmentation, storage
-
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -55,14 +51,12 @@ class PentominoArchiver:
         """
 
         image_path = Path(image_path)
-        logger.info("Starting pipeline for %s", image_path)
         original = preprocessing.load_image(image_path)
         board = preprocessing.extract_board_region(original)
         grid = segmentation.segment_grid(board)
         pieces = classification.label_pieces(grid)
         canonical = normalization.to_canonical_solution(pieces)
         self.archive.store_solution(canonical)
-        logger.info("Completed pipeline for %s", image_path)
         return PipelineResult(
             image_path=image_path,
             board_image=board,

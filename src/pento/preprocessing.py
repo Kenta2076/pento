@@ -21,21 +21,6 @@ class PreprocessingError(RuntimeError):
     """Raised when the preprocessing stage fails."""
 
 
-def _describe_image(array: np.ndarray) -> dict[str, float | tuple[int, ...] | str]:
-    """Return a dictionary with basic statistics about an image array."""
-
-    stats: dict[str, float | tuple[int, ...] | str] = {
-        "shape": array.shape,
-        "dtype": str(array.dtype),
-    }
-
-    if array.size:
-        stats["min"] = float(np.min(array))
-        stats["max"] = float(np.max(array))
-        stats["mean"] = float(np.mean(array))
-    return stats
-
-
 def load_image(path: Path) -> np.ndarray:
     """Load an image from ``path`` into a NumPy array.
 
@@ -48,9 +33,7 @@ def load_image(path: Path) -> np.ndarray:
         image = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if image is None:
             raise PreprocessingError(f"Unable to read image: {path}")
-        result = image.astype("float32") / 255.0
-        logger.info("Loaded image %s with stats %s", path, _describe_image(result))
-        return result
+        return image.astype("float32") / 255.0
 
     try:
         from PIL import Image
@@ -60,9 +43,7 @@ def load_image(path: Path) -> np.ndarray:
         ) from exc
 
     with Image.open(path) as img:
-        array = np.asarray(img, dtype="float32") / 255.0
-        logger.info("Loaded image %s with stats %s", path, _describe_image(array))
-        return array
+        return np.asarray(img, dtype="float32") / 255.0
 
 
 def _order_corners(points: np.ndarray) -> np.ndarray:
@@ -157,5 +138,4 @@ def extract_board_region(image: np.ndarray) -> np.ndarray:
     enhanced = cv2.bilateralFilter(enhanced, d=9, sigmaColor=75, sigmaSpace=75)
 
     result = enhanced.astype("float32") / 255.0
-    logger.info("Extracted board region with stats %s", _describe_image(result))
     return result

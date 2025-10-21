@@ -93,11 +93,4 @@ def segment_grid(board_image: np.ndarray) -> np.ndarray:
         logger.error("Segmented grid has unexpected shape %s (expected %s)", grid.shape, expected_shape)
         raise SegmentationError("Segmented grid has unexpected dimensions")
 
-    logger.info(
-        "Segmented board into grid with shape %s (cell size: %dx%d, channels=%d)",
-        grid.shape,
-        cell_height,
-        cell_width,
-        channels,
-    )
     return grid
