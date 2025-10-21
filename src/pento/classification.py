@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import List
 
 import numpy as np
 
 from .segmentation import GRID_HEIGHT, GRID_WIDTH
+
+
+logger = logging.getLogger(__name__)
 
 PIECE_NAMES = [
     "F",
@@ -134,4 +138,5 @@ def label_pieces(grid_cells: np.ndarray) -> List[LabeledPiece]:
     if not np.all(coverage == 1):
         raise ClassificationError("Piece masks overlap or leave gaps in the grid")
 
+    logger.info("Classified pentomino grid with labels %s", " ".join(unique_labels))
     return pieces
