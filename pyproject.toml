@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pento"
+version = "0.1.0"
+description = "Template pipeline for archiving pentomino puzzle solutions"
+authors = [{ name = "Pento Contributors" }]
+readme = "Readme.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+vision = [
+    "opencv-python",
+    "pillow",
+]
+
+[project.scripts]
+pento-archive = "pento.cli:main"
