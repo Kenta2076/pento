@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -9,6 +10,9 @@ import numpy as np
 
 from .classification import LabeledPiece, PIECE_NAMES
 from .segmentation import GRID_HEIGHT, GRID_WIDTH
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -126,4 +130,5 @@ def to_canonical_solution(pieces: Iterable[LabeledPiece]) -> CanonicalSolution:
 
     grid = _assemble_grid(piece_list)
     canonical_grid = _choose_canonical(grid)
+    logger.info("Normalized solution to canonical grid:\n%s", "\n".join("".join(row) for row in canonical_grid))
     return CanonicalSolution(grid=canonical_grid)
