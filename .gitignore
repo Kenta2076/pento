@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dylib
+.venv/
+.env
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+assets/puzzles/*
+!assets/puzzles/.gitkeep
