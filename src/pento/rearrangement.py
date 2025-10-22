@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Mapping, Sequence, Tuple
 
 import numpy as np
 
@@ -95,6 +95,17 @@ _ALL_PLACEMENTS: Dict[str, List[frozenset[Tuple[int, int]]]] = {
 }
 
 
+@dataclass(frozen=True)
+class SearchStep:
+    """Snapshot emitted while exploring a local rearrangement search."""
+
+    subset: Tuple[str, ...]
+    depth: int
+    piece: str | None
+    placement: frozenset[Tuple[int, int]] | None
+    status: str
+
+
 @dataclass
 class LocalRearrangement:
     """Description of an alternative placement for a subset of pieces."""
@@ -138,34 +149,135 @@ def _search_alternative(
     subset: Sequence[str],
     options: Mapping[str, List[frozenset[Tuple[int, int]]]],
     original: Mapping[str, frozenset[Tuple[int, int]]],
+    *,
+    record_step: Callable[[SearchStep], None] | None = None,
 ) -> Dict[str, frozenset[Tuple[int, int]]] | None:
     names = tuple(sorted(subset))
     used: set[Tuple[int, int]] = set()
     assignment: Dict[str, frozenset[Tuple[int, int]]] = {}
 
+    def emit(step: SearchStep) -> None:
+        if record_step is not None:
+            record_step(step)
+
     def backtrack(index: int) -> Dict[str, frozenset[Tuple[int, int]]] | None:
         if index == len(names):
             if any(assignment[name] != original[name] for name in names):
+                emit(
+                    SearchStep(
+                        subset=names,
+                        depth=index,
+                        piece=None,
+                        placement=None,
+                        status="complete",
+                    )
+                )
                 return dict(assignment)
             return None
 
         name = names[index]
         for placement in options[name]:
             if any(cell in used for cell in placement):
+                emit(
+                    SearchStep(
+                        subset=names,
+                        depth=index,
+                        piece=name,
+                        placement=placement,
+                        status="conflict",
+                    )
+                )
                 continue
+
+            emit(
+                SearchStep(
+                    subset=names,
+                    depth=index,
+                    piece=name,
+                    placement=placement,
+                    status="try",
+                )
+            )
 
             assignment[name] = placement
             used.update(placement)
 
             result = backtrack(index + 1)
             if result is not None:
+                emit(
+                    SearchStep(
+                        subset=names,
+                        depth=index,
+                        piece=name,
+                        placement=placement,
+                        status="accept",
+                    )
+                )
                 return result
 
             used.difference_update(placement)
+            emit(
+                SearchStep(
+                    subset=names,
+                    depth=index,
+                    piece=name,
+                    placement=placement,
+                    status="backtrack",
+                )
+            )
 
         return None
 
     return backtrack(0)
+
+
+def _candidate_options(
+    placements: Mapping[str, frozenset[Tuple[int, int]]],
+    *,
+    min_size: int,
+    max_size: int,
+) -> Iterator[Tuple[Tuple[str, ...], Dict[str, List[frozenset[Tuple[int, int]]]]]]:
+    all_names = tuple(sorted(PIECE_NAMES))
+
+    for size in range(min_size, max_size + 1):
+        for subset in combinations(all_names, size):
+            region_cells = frozenset().union(*(placements[name] for name in subset))
+
+            candidate_options: Dict[str, List[frozenset[Tuple[int, int]]]] = {}
+            viable = True
+
+            for name in subset:
+                options = [
+                    placement
+                    for placement in _ALL_PLACEMENTS[name]
+                    if placement.issubset(region_cells)
+                ]
+
+                if len(options) <= 1:
+                    viable = False
+                    break
+
+                candidate_options[name] = options
+
+            if viable:
+                yield subset, candidate_options
+
+
+def _build_rearranged_grid(
+    grid: np.ndarray,
+    *,
+    subset: Sequence[str],
+    placements: Mapping[str, frozenset[Tuple[int, int]]],
+    alternative: Mapping[str, frozenset[Tuple[int, int]]],
+) -> np.ndarray:
+    new_grid = np.array(grid, copy=True)
+    for name in subset:
+        for cell in placements[name]:
+            new_grid[cell] = "."
+    for name, cells in alternative.items():
+        for row, col in cells:
+            new_grid[row, col] = name
+    return new_grid
 
 
 def find_local_rearrangements(
@@ -197,49 +309,71 @@ def find_local_rearrangements(
 
     results: List[LocalRearrangement] = []
 
-    for size in range(min_size, max_size + 1):
-        for subset in combinations(sorted(PIECE_NAMES), size):
-            region_cells = frozenset().union(*(placements[name] for name in subset))
+    for subset, candidate_options in _candidate_options(
+        placements, min_size=min_size, max_size=max_size
+    ):
+        alternative = _search_alternative(subset, candidate_options, placements)
+        if alternative is None:
+            continue
 
-            candidate_options: Dict[str, List[frozenset[Tuple[int, int]]]] = {}
-            viable = True
+        new_grid = _build_rearranged_grid(
+            grid, subset=subset, placements=placements, alternative=alternative
+        )
+        rearrangement = LocalRearrangement(
+            pieces=tuple(sorted(subset)),
+            alternative_grid=new_grid,
+            placements=alternative,
+        )
+        results.append(rearrangement)
 
-            for name in subset:
-                options = [
-                    placement
-                    for placement in _ALL_PLACEMENTS[name]
-                    if placement.issubset(region_cells)
-                ]
-
-                if len(options) <= 1:
-                    viable = False
-                    break
-
-                candidate_options[name] = options
-
-            if not viable:
-                continue
-
-            alternative = _search_alternative(subset, candidate_options, placements)
-            if alternative is None:
-                continue
-
-            new_grid = np.array(grid, copy=True)
-            for name in subset:
-                for cell in placements[name]:
-                    new_grid[cell] = "."
-            for name, cells in alternative.items():
-                for row, col in cells:
-                    new_grid[row, col] = name
-
-            rearrangement = LocalRearrangement(
-                pieces=tuple(sorted(subset)),
-                alternative_grid=new_grid,
-                placements=alternative,
-            )
-            results.append(rearrangement)
-
-            if max_results is not None and len(results) >= max_results:
-                return results
+        if max_results is not None and len(results) >= max_results:
+            return results
 
     return results
+
+
+def trace_local_rearrangements(
+    solution_grid: np.ndarray,
+    *,
+    min_subset_size: int = 2,
+    max_subset_size: int | None = None,
+    max_results: int | None = 1,
+) -> List[Tuple[LocalRearrangement, List[SearchStep]]]:
+    """Run the rearrangement search while recording the explored placements."""
+
+    grid = np.asarray(solution_grid, dtype="<U1")
+    placements = _validate_solution_grid(grid)
+
+    min_size = max(2, min_subset_size)
+    max_size = len(PIECE_NAMES) if max_subset_size is None else max(min_size, max_subset_size)
+
+    traced_results: List[Tuple[LocalRearrangement, List[SearchStep]]] = []
+
+    for subset, candidate_options in _candidate_options(
+        placements, min_size=min_size, max_size=max_size
+    ):
+        steps: List[SearchStep] = []
+        alternative = _search_alternative(
+            subset,
+            candidate_options,
+            placements,
+            record_step=steps.append,
+        )
+
+        if alternative is None:
+            continue
+
+        new_grid = _build_rearranged_grid(
+            grid, subset=subset, placements=placements, alternative=alternative
+        )
+        rearrangement = LocalRearrangement(
+            pieces=tuple(sorted(subset)),
+            alternative_grid=new_grid,
+            placements=alternative,
+        )
+        traced_results.append((rearrangement, steps))
+
+        if max_results is not None and len(traced_results) >= max_results:
+            break
+
+    return traced_results
