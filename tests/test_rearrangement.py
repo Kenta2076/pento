@@ -46,3 +46,24 @@ def test_find_local_rearrangements_respects_minimum_subset_size() -> None:
 
     assert results
     assert all(len(alt.pieces) >= 3 for alt in results)
+
+
+def test_find_local_rearrangements_deduplicates_alternative_grids(monkeypatch) -> None:
+    grid = _sample_solution()
+
+    original_candidate_options = rearrangement._candidate_options
+
+    def duplicate_first(*args, **kwargs):
+        iterator = iter(original_candidate_options(*args, **kwargs))
+        subset, options = next(iterator)
+        yield subset, options
+        duplicate_options = {name: list(placements) for name, placements in options.items()}
+        yield subset, duplicate_options
+
+    monkeypatch.setattr(rearrangement, "_candidate_options", duplicate_first)
+
+    results = rearrangement.find_local_rearrangements(grid, max_results=2)
+
+    signatures = {alt.alternative_grid.tobytes() for alt in results}
+
+    assert len(signatures) == len(results)
