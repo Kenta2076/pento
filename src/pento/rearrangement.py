@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
+import numpy.typing as npt
+
 import numpy as np
 
 from .classification import PIECE_NAMES
@@ -74,8 +76,11 @@ def _generate_orientations(pattern: Sequence[str]) -> List[Tuple[Tuple[int, int]
     return orientations
 
 
-def _placements_for_piece(pattern: Sequence[str]) -> List[frozenset[Tuple[int, int]]]:
-    placements: set[frozenset[Tuple[int, int]]] = set()
+Placement = frozenset[Tuple[int, int]]
+
+
+def _placements_for_piece(pattern: Sequence[str]) -> List[Placement]:
+    placements: set[Placement] = set()
 
     for orientation in _generate_orientations(pattern):
         max_row = max(row for row, _ in orientation)
@@ -95,16 +100,16 @@ _ALL_PLACEMENTS: Dict[str, List[frozenset[Tuple[int, int]]]] = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class LocalRearrangement:
     """Description of an alternative placement for a subset of pieces."""
 
     pieces: Tuple[str, ...]
-    alternative_grid: np.ndarray
-    placements: Dict[str, frozenset[Tuple[int, int]]]
+    alternative_grid: npt.NDArray[np.str_]
+    placements: Dict[str, Placement]
 
 
-def _validate_solution_grid(grid: np.ndarray) -> Dict[str, frozenset[Tuple[int, int]]]:
+def _validate_solution_grid(grid: npt.NDArray[np.str_]) -> Dict[str, Placement]:
     if grid.shape != (GRID_HEIGHT, GRID_WIDTH):
         raise ValueError(
             f"Solution grid must have shape {(GRID_HEIGHT, GRID_WIDTH)}, got {grid.shape}"
@@ -119,7 +124,7 @@ def _validate_solution_grid(grid: np.ndarray) -> Dict[str, frozenset[Tuple[int, 
                 raise ValueError(f"Unexpected label '{label}' at ({row}, {col}) in solution grid")
             cells_by_piece[label].add((row, col))
 
-    placements: Dict[str, frozenset[Tuple[int, int]]] = {}
+    placements: Dict[str, Placement] = {}
 
     for name, cells in cells_by_piece.items():
         if len(cells) != 5:
@@ -136,12 +141,12 @@ def _validate_solution_grid(grid: np.ndarray) -> Dict[str, frozenset[Tuple[int, 
 
 def _search_alternative(
     subset: Sequence[str],
-    options: Mapping[str, List[frozenset[Tuple[int, int]]]],
-    original: Mapping[str, frozenset[Tuple[int, int]]],
-) -> Dict[str, frozenset[Tuple[int, int]]] | None:
+    options: Mapping[str, List[Placement]],
+    original: Mapping[str, Placement],
+) -> Dict[str, Placement] | None:
     names = tuple(sorted(subset, key=lambda name: len(options[name])))
     used: set[Tuple[int, int]] = set()
-    assignment: Dict[str, frozenset[Tuple[int, int]]] = {}
+    assignment: Dict[str, Placement] = {}
 
     def backtrack(index: int) -> Dict[str, frozenset[Tuple[int, int]]] | None:
         if index == len(names):
@@ -171,8 +176,12 @@ def _search_alternative(
     return backtrack(0)
 
 
+def _canonicalize_grid(grid: npt.NDArray[np.str_]) -> Tuple[str, ...]:
+    return tuple("".join(row) for row in grid)
+
+
 def find_local_rearrangements(
-    solution_grid: np.ndarray,
+    solution_grid: npt.NDArray[np.str_],
     *,
     min_subset_size: int = 2,
     max_subset_size: int | None = None,
@@ -184,7 +193,9 @@ def find_local_rearrangements(
         solution_grid: 6×10 array containing the piece labels of a known solution.
         min_subset_size: Minimum number of pieces that may be rearranged together.
         max_subset_size: Optional upper bound on the number of pieces to rearrange.
-        max_results: Optional limit on the number of rearrangements to return.
+        max_results: Optional limit on the number of rearrangements to return. If
+            ``None``, all rearrangements discovered within the search limits are
+            returned.
 
     Returns:
         A list of :class:`LocalRearrangement` instances describing the discovered
@@ -201,11 +212,14 @@ def find_local_rearrangements(
     results: List[LocalRearrangement] = []
     seen: set[Tuple[str, ...]] = set()
 
+    def result_key(alt: LocalRearrangement) -> Tuple[int, Tuple[str, ...], Tuple[str, ...]]:
+        return (len(alt.pieces), alt.pieces, _canonicalize_grid(alt.alternative_grid))
+
     for size in range(min_size, max_size + 1):
         for subset in combinations(sorted(PIECE_NAMES), size):
             region_cells = frozenset().union(*(placements[name] for name in subset))
 
-            candidate_options: Dict[str, List[frozenset[Tuple[int, int]]]] = {}
+            candidate_options: Dict[str, List[Placement]] = {}
             viable = True
 
             for name in subset:
@@ -242,7 +256,7 @@ def find_local_rearrangements(
                 placements=alternative,
             )
 
-            key = tuple("".join(row) for row in new_grid)
+            key = _canonicalize_grid(new_grid)
 
             if key in seen:
                 continue
@@ -251,6 +265,6 @@ def find_local_rearrangements(
             results.append(rearrangement)
 
             if max_results is not None and len(results) >= max_results:
-                return results
+                return sorted(results, key=result_key)
 
-    return results
+    return sorted(results, key=result_key)

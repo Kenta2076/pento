@@ -24,6 +24,16 @@ def test_find_local_rearrangements_discovers_alternative() -> None:
 
     assert results, "Expected at least one alternative rearrangement"
 
+    ordering_keys = [
+        (
+            len(alt.pieces),
+            alt.pieces,
+            tuple("".join(row) for row in alt.alternative_grid),
+        )
+        for alt in results
+    ]
+    assert ordering_keys == sorted(ordering_keys)
+
     alt = results[0]
     assert alt.pieces == ("F", "X")
     assert not np.array_equal(alt.alternative_grid, grid)
