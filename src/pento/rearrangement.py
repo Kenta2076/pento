@@ -317,8 +317,15 @@ def find_local_rearrangements(
         if alternative is None:
             continue
 
+        changed_names = [name for name in subset if alternative[name] != placements[name]]
+
+        changed_placements = {name: alternative[name] for name in changed_names}
+
         new_grid = _build_rearranged_grid(
-            grid, subset=subset, placements=placements, alternative=alternative
+            grid,
+            subset=changed_names,
+            placements=placements,
+            alternative=changed_placements,
         )
         grid_signature = new_grid.tobytes()
         if grid_signature in seen_grids:
@@ -327,9 +334,9 @@ def find_local_rearrangements(
         seen_grids.add(grid_signature)
 
         rearrangement = LocalRearrangement(
-            pieces=tuple(sorted(subset)),
+            pieces=tuple(sorted(changed_names)),
             alternative_grid=new_grid,
-            placements=alternative,
+            placements=changed_placements,
         )
         results.append(rearrangement)
 
@@ -371,8 +378,15 @@ def trace_local_rearrangements(
         if alternative is None:
             continue
 
+        changed_names = [name for name in subset if alternative[name] != placements[name]]
+
+        changed_placements = {name: alternative[name] for name in changed_names}
+
         new_grid = _build_rearranged_grid(
-            grid, subset=subset, placements=placements, alternative=alternative
+            grid,
+            subset=changed_names,
+            placements=placements,
+            alternative=changed_placements,
         )
         grid_signature = new_grid.tobytes()
         if grid_signature in seen_grids:
@@ -381,9 +395,9 @@ def trace_local_rearrangements(
         seen_grids.add(grid_signature)
 
         rearrangement = LocalRearrangement(
-            pieces=tuple(sorted(subset)),
+            pieces=tuple(sorted(changed_names)),
             alternative_grid=new_grid,
-            placements=alternative,
+            placements=changed_placements,
         )
         traced_results.append((rearrangement, steps))
 
