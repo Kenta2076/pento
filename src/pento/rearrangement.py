@@ -308,6 +308,7 @@ def find_local_rearrangements(
     max_size = len(PIECE_NAMES) if max_subset_size is None else max(min_size, max_subset_size)
 
     results: List[LocalRearrangement] = []
+    seen_grids: set[bytes] = set()
 
     for subset, candidate_options in _candidate_options(
         placements, min_size=min_size, max_size=max_size
@@ -319,6 +320,12 @@ def find_local_rearrangements(
         new_grid = _build_rearranged_grid(
             grid, subset=subset, placements=placements, alternative=alternative
         )
+        grid_signature = new_grid.tobytes()
+        if grid_signature in seen_grids:
+            continue
+
+        seen_grids.add(grid_signature)
+
         rearrangement = LocalRearrangement(
             pieces=tuple(sorted(subset)),
             alternative_grid=new_grid,
@@ -348,6 +355,7 @@ def trace_local_rearrangements(
     max_size = len(PIECE_NAMES) if max_subset_size is None else max(min_size, max_subset_size)
 
     traced_results: List[Tuple[LocalRearrangement, List[SearchStep]]] = []
+    seen_grids: set[bytes] = set()
 
     for subset, candidate_options in _candidate_options(
         placements, min_size=min_size, max_size=max_size
@@ -366,6 +374,12 @@ def trace_local_rearrangements(
         new_grid = _build_rearranged_grid(
             grid, subset=subset, placements=placements, alternative=alternative
         )
+        grid_signature = new_grid.tobytes()
+        if grid_signature in seen_grids:
+            continue
+
+        seen_grids.add(grid_signature)
+
         rearrangement = LocalRearrangement(
             pieces=tuple(sorted(subset)),
             alternative_grid=new_grid,
