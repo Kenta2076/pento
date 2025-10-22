@@ -6,7 +6,7 @@ from typing import Iterable, Tuple
 
 import numpy as np
 
-from .classification import LabeledPiece
+from .classification import LabeledPiece, PIECE_NAMES
 from .segmentation import GRID_HEIGHT, GRID_WIDTH
 
 
@@ -138,10 +138,87 @@ def plot_label_grid(label_grid: np.ndarray, *, ax=None, title: str | None = None
     return ax
 
 
+def plot_colored_label_grid(
+    label_grid: np.ndarray,
+    *,
+    ax=None,
+    title: str | None = None,
+    highlight: Iterable[str] | None = None,
+    show_labels: bool = True,
+):
+    """Render a label grid with per-piece colors for visual exploration."""
+
+    plt = _ensure_matplotlib()
+    from matplotlib.colors import to_rgba  # Imported lazily with Matplotlib.
+
+    grid = np.asarray(label_grid)
+    if grid.shape != (GRID_HEIGHT, GRID_WIDTH):
+        raise ValueError(
+            f"Expected grid shape {(GRID_HEIGHT, GRID_WIDTH)}, received {grid.shape}"
+        )
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(8, 5))
+
+    palette = plt.get_cmap("tab20").colors
+    color_lookup = {
+        name: to_rgba(palette[index % len(palette)])
+        for index, name in enumerate(sorted(PIECE_NAMES))
+    }
+
+    highlight_set = {str(name) for name in highlight or []}
+
+    rgba_grid = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4), dtype=float)
+    for (row, col), value in np.ndenumerate(grid):
+        label = str(value)
+        if label == ".":
+            rgba_grid[row, col] = (0.95, 0.95, 0.95, 1.0)
+            continue
+
+        base = color_lookup.get(label)
+        if base is None:
+            base = (0.7, 0.7, 0.7, 1.0)
+
+        if highlight_set and label not in highlight_set:
+            softened = tuple(0.75 + 0.25 * channel for channel in base[:3]) + (1.0,)
+            rgba_grid[row, col] = softened
+        else:
+            rgba_grid[row, col] = base[:3] + (1.0,)
+
+    ax.imshow(rgba_grid, interpolation="none")
+
+    ax.set_xticks(range(GRID_WIDTH))
+    ax.set_yticks(range(GRID_HEIGHT))
+    ax.set_xlim(-0.5, GRID_WIDTH - 0.5)
+    ax.set_ylim(GRID_HEIGHT - 0.5, -0.5)
+    ax.grid(True, which="both", color="white", linewidth=1.0, alpha=0.6)
+
+    if show_labels:
+        for (row, col), value in np.ndenumerate(grid):
+            ax.text(
+                col,
+                row,
+                str(value),
+                ha="center",
+                va="center",
+                fontsize=12,
+                family="monospace",
+                color="black",
+            )
+
+    if highlight_set:
+        ax.set_title(title or f"Highlighted: {', '.join(sorted(highlight_set))}")
+    else:
+        ax.set_title(title or "Pentomino labels")
+
+    return ax
+
+
 __all__ = [
     "format_label_grid",
     "grid_to_labeled_pieces",
     "labeled_pieces_to_grid",
+    "plot_colored_label_grid",
     "plot_grid_cells",
     "plot_label_grid",
     "show_board_image",
