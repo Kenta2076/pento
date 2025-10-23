@@ -152,7 +152,8 @@ def _search_alternative(
     *,
     record_step: Callable[[SearchStep], None] | None = None,
 ) -> Dict[str, frozenset[Tuple[int, int]]] | None:
-    names = tuple(sorted(subset))
+    
+    names = tuple(sorted(subset, key=lambda n: (len(options[n]), n)))
     used: set[Tuple[int, int]] = set()
     assignment: Dict[str, frozenset[Tuple[int, int]]] = {}
 
